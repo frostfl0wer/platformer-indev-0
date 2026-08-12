@@ -1,0 +1,15 @@
+[gd_scene format=3 uid="uid://dib8qy37rql0k"]
+
+[ext_resource type="Texture2D" uid="uid://b1nw3ulwf3mye" path="res://assets/tml_main.png" id="1_pn0lk"]
+
+[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_l5jjw"]
+texture = ExtResource("1_pn0lk")
+0:0/0 = 0
+0:0/0/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+
+[sub_resource type="TileSet" id="TileSet_g4v7s"]
+physics_layer_0/collision_layer = 1
+sources/0 = SubResource("TileSetAtlasSource_l5jjw")
+
+[node name="tml_main" type="TileMapLayer" unique_id=1833960202]
+tile_set = SubResource("TileSet_g4v7s")
