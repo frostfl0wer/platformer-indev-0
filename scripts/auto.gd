@@ -5,17 +5,17 @@ var cam_mode = "follow"
 
 #player stats (prefix pl_)
 var pl_speed = 300
-var pl_x_vel_cap = 700
+var pl_x_vel_cap = 500
 
 var pl_jump_height = -320
-var pl_jump_time = 100
-var pl_hold_jump = false
-var pl_grounded = true
+var pl_wall_slide_speed = 40
+var pl_state:String = ""
+var pl_coyote_state:String = ""
 
 func _process(_delta: float) -> void:
 	if Input.is_action_pressed("quit"):
 		get_tree().quit()
-	Engine.max_fps=60
+	#Engine.max_fps=10
 
 #casts a ray
 #NOTE: world = get_world_2d() which should be accessable from where this function is called
