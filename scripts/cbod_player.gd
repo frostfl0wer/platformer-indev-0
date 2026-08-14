@@ -28,11 +28,14 @@ func _physics_process(delta: float) -> void:
 		trunc_x_vel()
 	
 	
+<<<<<<< Updated upstream
 	
 	if Auto.pl_state == "airborne":
 		velocity=velocity*.99
 	
 	
+=======
+>>>>>>> Stashed changes
 	#------------------------------------------------------------------------------------------------------------
 	#y movement
 	#(dont read this if statement it just raycasts to the bottom corners of the player hitbox to see if either side is grounded)
