@@ -56,6 +56,8 @@ func _physics_process(delta: float) -> void:
 	move_and_slide()
 
 
+#call this instead of manually assigning the state variable, allowing for actions on state entrance/exit to be down here
+#as opposed to clogging up the state detection code
 func state_init(new_state) -> void:
 	print("init", new_state)
 	
@@ -72,16 +74,22 @@ func state_init(new_state) -> void:
 	if prev_state==States.JUMP:
 		pass#unused for now (and maybe forever)
 
+
+#skip deceleration process when player changes directions, for snappier movement
 func quick_turnaround() -> void:
 	if input_direction and sign(velocity.x) != sign(input_direction):
 		velocity.x = 0
 
+#caps x velocity to the player's speed
+#this is important because acceleration needs to be way higher than speed for smooth acceleration to feel good -- in fact, it still doesn't feel perfect
 func cap_x_vel() -> void:
 	if velocity.x>speed:
 		velocity.x=speed
 	if velocity.x<-speed:
 		velocity.x= -speed
 
+#assigns direction of input to input_direction variable as either -1:left, 0:none, or 1:right
+#this function really should've returned that value instead, but for now I'm going to leave it
 func get_input_direction() -> void:
 	if Input.is_action_pressed("left"):
 		input_direction=-1
