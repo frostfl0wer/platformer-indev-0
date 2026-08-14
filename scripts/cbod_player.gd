@@ -22,12 +22,15 @@ func _physics_process(delta: float) -> void:
 		if velocity.x<0:#apply extra force when turning to the left
 			Auto.apply_force(self, delta, Auto.pl_speed*2, 0)
 		
-	if !Input.is_action_pressed("left") and !Input.is_action_pressed("right"):
-		@warning_ignore("narrowing_conversion") Auto.apply_force(self, delta, -velocity.x*3, 0)
+	if !Input.is_action_pressed("left") and !Input.is_action_pressed("right") and Auto.pl_state == "grounded":
+		@warning_ignore("narrowing_conversion") Auto.apply_force(self, delta, -velocity.x*10, 0)
 		#speed truncation
 		trunc_x_vel()
 	
 	
+	
+	if Auto.pl_state == "airborne":
+		velocity=velocity*.99
 	
 	
 	#------------------------------------------------------------------------------------------------------------
@@ -45,6 +48,7 @@ func _physics_process(delta: float) -> void:
 		@warning_ignore("narrowing_conversion") Auto.apply_force(self, delta, 0, -velocity.y*10)
 	
 	
+	#------------------------------------------------------------------------------------------------------------
 	#wall sliding (right)
 	#raycasts to the top and bottom right of the player hitbox
 	if Auto.pl_state=="airborne" and Input.is_action_pressed("right") and Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y+$col_player.shape.size.y/2)) and Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y-$col_player.shape.size.y/2)):
@@ -70,7 +74,8 @@ func _physics_process(delta: float) -> void:
 			velocity.y+=Auto.pl_jump_height
 			velocity.x+= Auto.pl_speed-20
 	
-	
+	#if Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y+$col_player.shape.size.y/2)) and not Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y-$col_player.shape.size.y/2)):
+		#velocity=Vector2.ZERO
 	
 	#------------------------------------------------------------------------------------------------------------
 	#coyote state
@@ -100,15 +105,16 @@ func _physics_process(delta: float) -> void:
 				if Input.is_action_just_pressed("jump"):
 					velocity.y+=Auto.pl_jump_height
 	
-	#print(Auto.pl_state)
-	#print(Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y+$col_player.shape.size.y/2)))
-	#print(Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y-$col_player.shape.size.y/2)))
+	print(Auto.pl_state)
 	
 	move_and_slide()
 
 #------------------------------------------------------------------------------------------------------------
 #used for debugging raycasting
 func _draw() -> void:
+	#getupt raycasts r
+	draw_line(position, Vector2(position.x+$col_player.shape.size.x/2, position.y), Color.RED)
+	
 	#sliding raycasts r
 	draw_line(position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y+$col_player.shape.size.y/2), Color.WHITE)
 	draw_line(position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y-$col_player.shape.size.y/2), Color.WHITE)
@@ -124,12 +130,12 @@ func _draw() -> void:
 #------------------------------------------------------------------------------------------------------------
 #timer which handles coyote time
 func coyote_timer(time):
-	print("timer start")
+	#print("timer start")
 	coyote_time_active=true
 	await get_tree().create_timer(time).timeout
 	Auto.pl_coyote_state=Auto.pl_state
 	coyote_time_active=false
-	print("timer stop")
+	#print("timer stop")
 
 #------------------------------------------------------------------------------------------------------------
 #truncate x velocity

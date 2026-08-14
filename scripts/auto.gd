@@ -5,10 +5,11 @@ var cam_mode = "follow"
 
 #player stats (prefix pl_)
 var pl_speed = 300
-var pl_x_vel_cap = 500
+var pl_x_vel_cap = 3000
 
 var pl_jump_height = -320
 var pl_wall_slide_speed = 40
+
 var pl_state:String = ""
 var pl_coyote_state:String = ""
 
