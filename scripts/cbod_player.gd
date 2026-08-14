@@ -1,146 +1,91 @@
 extends CharacterBody2D
 #one goal of this node is to replicatable so when i change scenes i can just add it again
 
-var coyote_time_active=false
+#player stats
+enum States {IDLE, RUN, JUMP, FALL}
 
+var acceleration := 1000
+var speed:=170
+var jump_vel := -320
+var input_direction := 1
+var state: States = States.FALL
+
+#state machine tutorial used: https://www.gdquest.com/tutorial/godot/design-patterns/finite-state-machine/
 func _physics_process(delta: float) -> void:
-	#speed cap
-	cap()
-	#gravity
-	Auto.apply_force(self, delta, 0, Auto.gravity)
+	get_input_direction()
+	quick_turnaround()
 	
+	#states are detected based on inputs, sensors built into CharacterBody2D, and most importantly, the state the player is currently in
+	var horiz_movement := Input.is_action_pressed("left") or Input.is_action_pressed("right")
+	if is_on_floor():
+		if state in [States.RUN, States.IDLE] and Input.is_action_pressed("jump"):
+			state_init(States.JUMP)
+		elif (state in [States.IDLE, States.FALL]) and horiz_movement:
+			state_init(States.RUN)
+		elif state in [States.RUN, States.FALL] and not horiz_movement:
+			state_init(States.IDLE)
+	if not is_on_floor():
+		if (state in [States.JUMP, States.RUN, States.IDLE]) and (velocity.y >= 0 or Input.is_action_just_released("jump")):
+			state_init(States.FALL)
 	
-	#------------------------------------------------------------------------------------------------------------
-	#x movement
-	if Input.is_action_pressed("left"):
-		Auto.apply_force(self, delta, -Auto.pl_speed, 0)
-		if velocity.x>0:#apply extra force when turning to the right
-			Auto.apply_force(self, delta, -Auto.pl_speed*2, 0)
-		
-	if Input.is_action_pressed("right"):
-		Auto.apply_force(self, delta, Auto.pl_speed, 0)
-		if velocity.x<0:#apply extra force when turning to the left
-			Auto.apply_force(self, delta, Auto.pl_speed*2, 0)
-		
-	if !Input.is_action_pressed("left") and !Input.is_action_pressed("right"):
-		@warning_ignore("narrowing_conversion") Auto.apply_force(self, delta, -velocity.x*3, 0)
-		#speed truncation
-		trunc_x_vel()
+	#actions are determined by the state
+	if state==States.RUN:
+		velocity.x += acceleration*input_direction*delta
+		cap_x_vel()
 	
+	if state==States.IDLE:
+		velocity.x = move_toward(velocity.x, 0, acceleration*delta)
 	
+	if state==States.FALL:
+		velocity.y+=Auto.gravity*delta
+		velocity.x += acceleration*input_direction*delta
+		cap_x_vel()
+		if not input_direction:
+			velocity.x = move_toward(velocity.x, 0, acceleration*delta)
 	
-	
-	#------------------------------------------------------------------------------------------------------------
-	#y movement
-	#(dont read this if statement it just raycasts to the bottom corners of the player hitbox to see if either side is grounded)
-	if Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2, position.y+$col_player.shape.size.y/2+0.1)) or Auto.cast(get_world_2d(), position, Vector2(position.x-$col_player.shape.size.x/2, position.y+$col_player.shape.size.y/2+0.1)): 
-		Auto.pl_state="grounded"
-		Auto.pl_coyote_state="grounded"
-	else:
-		Auto.pl_state="airborne"
-	
-	if Input.is_action_just_pressed("jump") and Auto.pl_state=="grounded":
-		velocity.y+=Auto.pl_jump_height
-	if Auto.pl_state=="airborne" and !Input.is_action_pressed("jump") and velocity.y<0:#decelerate jump when you dont hold the spacebar
-		@warning_ignore("narrowing_conversion") Auto.apply_force(self, delta, 0, -velocity.y*10)
-	
-	
-	#wall sliding (right)
-	#raycasts to the top and bottom right of the player hitbox
-	if Auto.pl_state=="airborne" and Input.is_action_pressed("right") and Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y+$col_player.shape.size.y/2)) and Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y-$col_player.shape.size.y/2)):
-		Auto.pl_state="wall_sliding_r"
-		Auto.pl_coyote_state="wall_sliding_r"
-	
-	if Auto.pl_state=="wall_sliding_r":
-		if velocity.y>0:
-			velocity.y=Auto.pl_wall_slide_speed
-		if Input.is_action_just_pressed("jump"):
-			velocity.y+=Auto.pl_jump_height
-			velocity.x+= -Auto.pl_speed+20
-	#wall sliding (left)
-	#raycasts to the top and bottom left of the player hitbox
-	if Auto.pl_state=="airborne" and Input.is_action_pressed("left") and Auto.cast(get_world_2d(), position, Vector2(position.x-$col_player.shape.size.x/2-0.1, position.y+$col_player.shape.size.y/2)) and Auto.cast(get_world_2d(), position, Vector2(position.x-$col_player.shape.size.x/2-0.1, position.y-$col_player.shape.size.y/2)):
-		Auto.pl_state="wall_sliding_l"
-		Auto.pl_coyote_state="wall_sliding_l"
-	
-	if Auto.pl_state=="wall_sliding_l":
-		if velocity.y>0:
-			velocity.y=Auto.pl_wall_slide_speed
-		if Input.is_action_just_pressed("jump"):
-			velocity.y+=Auto.pl_jump_height
-			velocity.x+= Auto.pl_speed-20
+	if state==States.JUMP:
+		velocity.x += acceleration*input_direction*delta
+		velocity.y+=Auto.gravity*delta
+		cap_x_vel()
+		if not input_direction:
+			velocity.x = move_toward(velocity.x, 0, acceleration*delta)
 	
 	
 	
-	#------------------------------------------------------------------------------------------------------------
-	#coyote state
-	#starts coyote_timer for different times depending on the state (ok i admit it i have no idea what i'm doing with this but whatever it works and it seems nicely scalable)
-	if Auto.pl_coyote_state != Auto.pl_state and not coyote_time_active:
-		match Auto.pl_coyote_state:
-			"wall_sliding_l":
-				coyote_timer(0.3)
-			"wall_sliding_r":
-				coyote_timer(0.3)
-			"grounded":
-				coyote_timer(0.1)
-	#executes coyote actions during the coyote time
-	if coyote_time_active:
-		match Auto.pl_coyote_state:
-			"wall_sliding_l":
-				if Input.is_action_just_pressed("jump"):
-					velocity.y=Auto.pl_wall_slide_speed
-					velocity.y+=Auto.pl_jump_height
-					velocity.x+= Auto.pl_speed-100
-			"wall_sliding_r":
-				if Input.is_action_just_pressed("jump"):
-					velocity.y=Auto.pl_wall_slide_speed
-					velocity.y+=Auto.pl_jump_height
-					velocity.x+= -Auto.pl_speed+100
-			"grounded":
-				if Input.is_action_just_pressed("jump"):
-					velocity.y+=Auto.pl_jump_height
-	
-	#print(Auto.pl_state)
-	#print(Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y+$col_player.shape.size.y/2)))
-	#print(Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y-$col_player.shape.size.y/2)))
-	
+	print(state)
 	move_and_slide()
 
-#------------------------------------------------------------------------------------------------------------
-#used for debugging raycasting
-func _draw() -> void:
-	#sliding raycasts r
-	draw_line(position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y+$col_player.shape.size.y/2), Color.WHITE)
-	draw_line(position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y-$col_player.shape.size.y/2), Color.WHITE)
-	#sliding raycasts l
-	draw_line(position, Vector2(position.x-$col_player.shape.size.x/2+0.1, position.y+$col_player.shape.size.y/2), Color.WHITE)
-	draw_line(position, Vector2(position.x-$col_player.shape.size.x/2+0.1, position.y-$col_player.shape.size.y/2), Color.WHITE)
+
+func state_init(new_state) -> void:
+	print("init", new_state)
 	
-	#grounded raycasts
-	draw_line(position, Vector2(position.x+$col_player.shape.size.x/2, position.y+$col_player.shape.size.y/2), Color.GREEN)
-	draw_line(position, Vector2(position.x-$col_player.shape.size.x/2, position.y+$col_player.shape.size.y/2), Color.GREEN)
-	pass
+	#on state entrance, executed once
+	if new_state==States.JUMP:
+		velocity.y = jump_vel
+	if new_state==States.FALL:
+		velocity.y = move_toward(velocity.y, 0, 160)
+	
+	var prev_state=state
+	state=new_state
+	
+	#on state exit, executed once
+	if prev_state==States.JUMP:
+		pass#unused for now (and maybe forever)
 
-#------------------------------------------------------------------------------------------------------------
-#timer which handles coyote time
-func coyote_timer(time):
-	print("timer start")
-	coyote_time_active=true
-	await get_tree().create_timer(time).timeout
-	Auto.pl_coyote_state=Auto.pl_state
-	coyote_time_active=false
-	print("timer stop")
+func quick_turnaround() -> void:
+	if input_direction and sign(velocity.x) != sign(input_direction):
+		velocity.x = 0
 
-#------------------------------------------------------------------------------------------------------------
-#truncate x velocity
-func trunc_x_vel():
-	if velocity.x < 20 and velocity.x > -20:
-		velocity.x=0
+func cap_x_vel() -> void:
+	if velocity.x>speed:
+		velocity.x=speed
+	if velocity.x<-speed:
+		velocity.x= -speed
 
-#------------------------------------------------------------------------------------------------------------
-#speed cap
-func cap():
-	if velocity.x > Auto.pl_x_vel_cap:
-		velocity.x=Auto.pl_x_vel_cap
-	if velocity.x < -Auto.pl_x_vel_cap:
-		velocity.x= -Auto.pl_x_vel_cap
+func get_input_direction() -> void:
+	if Input.is_action_pressed("left"):
+		input_direction=-1
+	elif Input.is_action_pressed("right"):
+		input_direction=1
+	else:
+		input_direction=0
