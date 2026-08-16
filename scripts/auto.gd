@@ -1,7 +1,7 @@
 extends Node
 
-var gravity = 800
-var cam_mode = "follow"
+var gravity = 600
+var cam_mode = ""
 
 func _process(_delta: float) -> void:
 	if Input.is_action_pressed("quit"):

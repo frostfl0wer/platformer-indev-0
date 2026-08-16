@@ -62,3 +62,5 @@ getup={
 textures/canvas_textures/default_texture_filter=0
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="mobile"
+environment/defaults/default_clear_color=Color(0.16350216, 0.16350219, 0.16350216, 1)
+environment/bg_color=Color(0.14, 0.14, 0.14, 1)

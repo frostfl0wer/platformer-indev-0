@@ -2,11 +2,13 @@ extends CharacterBody2D
 #one goal of this node is to replicatable so when i change scenes i can just add it again
 
 #player stats
-enum States {IDLE, RUN, JUMP, FALL}
+enum States {IDLE, RUN, JUMP, FALL, SLIDE}
 
-var acceleration := 2000
-var speed:=140
-var jump_vel := -300
+var deceleration := 2000
+var acceleration := 1000
+var speed:=100
+var jump_vel := -200
+var wallkick_vel := 200
 var input_direction := 1
 var state: States = States.FALL
 
@@ -15,6 +17,12 @@ const JUMP_BUFFER_TIME:=0.1
 
 var coyote_timer = Timer.new()
 const COYOTE_TIME:=0.1
+
+var wall_col_dir:=""
+
+#func _draw() -> void:
+	#draw_line(position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y), Color.GREEN)
+	#draw_line(position, Vector2(position.x-$col_player.shape.size.x/2-0.1, position.y), Color.GREEN)
 
 func _ready() -> void:
 	add_child(jump_buffer_timer)
@@ -30,20 +38,29 @@ func _physics_process(delta: float) -> void:
 		jump_buffer_timer.start(JUMP_BUFFER_TIME)
 	var jump_queued = not jump_buffer_timer.is_stopped()
 	var coyote_time_active = not coyote_timer.is_stopped()
+	var horiz_movement := Input.is_action_pressed("left") or Input.is_action_pressed("right")
 	
 	#states are detected based on inputs, sensors built into CharacterBody2D, and most importantly, the state the player is currently in
-	var horiz_movement := Input.is_action_pressed("left") or Input.is_action_pressed("right")
 	if is_on_floor():
 		if state in [States.RUN, States.IDLE, States.JUMP] and jump_queued:
 			state_init(States.JUMP)
-		elif (state in [States.IDLE, States.FALL]) and horiz_movement:
+		elif (state in [States.IDLE, States.FALL, States.SLIDE]) and horiz_movement:
 			state_init(States.RUN)
-		elif state in [States.RUN, States.FALL] and not horiz_movement:
+		elif state in [States.RUN, States.FALL, States.SLIDE] and not horiz_movement:
 			state_init(States.IDLE)
 	if not is_on_floor():
 		if (state in [States.JUMP, States.RUN, States.IDLE]) and (velocity.y >= 0 or Input.is_action_just_released("jump")):
 			state_init(States.FALL)
-		if (state in [States.FALL]) and coyote_time_active and jump_queued:
+		if (state in [States.SLIDE] and not is_on_wall()):#from Sliding state needs a seperate boolean from the above if statement
+			state_init(States.FALL)
+		if (state in [States.FALL, States.SLIDE, States.SLIDE]) and coyote_time_active and jump_queued:
+			state_init(States.JUMP)
+	if is_on_wall_only():
+		if (state in [States.FALL]) and ((get_wall_collision_direction()=="left" and input_direction==-1) or (get_wall_collision_direction()=="right" and input_direction==1)):
+			state_init(States.SLIDE)
+		if (state in [States.SLIDE] and input_direction==0):
+			state_init(States.FALL)
+		if (state in [States.SLIDE] and jump_queued):
 			state_init(States.JUMP)
 	
 	#actions are determined by the state
@@ -57,10 +74,14 @@ func _physics_process(delta: float) -> void:
 	if state==States.JUMP:
 		handle_horizontal_movement(delta)
 		velocity.y+=Auto.gravity*delta
+	if state==States.SLIDE:
+		handle_horizontal_movement(delta)
+		velocity.y += Auto.gravity*delta/4
 	
 	
 	
-	print(state)
+	#print(state)
+	print(velocity.x)
 	move_and_slide()
 
 
@@ -70,11 +91,13 @@ func state_init(new_state) -> void:
 	print("init", new_state)
 	
 	#on state entrance, executed once
-	if new_state==States.JUMP:
-		velocity.y = jump_vel
-		coyote_timer.stop()
+	#if new_state==States.JUMP:
+		#velocity.y = jump_vel
+		#coyote_timer.stop()
 	if new_state==States.FALL:
 		velocity.y = move_toward(velocity.y, 0, -velocity.y*.5)
+	if new_state==States.SLIDE:
+		velocity.y= move_toward(velocity.y, 0, 100)
 	
 	var prev_state=state
 	state=new_state
@@ -82,15 +105,37 @@ func state_init(new_state) -> void:
 	#on state exit, executed once
 	if prev_state in [States.IDLE, States.RUN] and new_state in [States.FALL]:
 		coyote_timer.start(COYOTE_TIME)
+	
+	if new_state==States.JUMP:
+		coyote_timer.stop()
+		if prev_state in [States.RUN, States.IDLE, States.JUMP]:
+			velocity.y = jump_vel
+		if prev_state in [States.SLIDE]:
+			if get_wall_collision_direction()=="right":
+				@warning_ignore("integer_division")velocity.y = jump_vel/2
+				velocity.x = -wallkick_vel
+			if get_wall_collision_direction()=="left":
+				@warning_ignore("integer_division")velocity.y = jump_vel/2
+				velocity.x = wallkick_vel
 
 
 #handles horizontal movement accounting for input direction
 func handle_horizontal_movement(delta: float) -> void:
-	velocity.x += acceleration*input_direction*delta
-	cap_x_vel()
+	#velocity.x += acceleration*input_direction*delta
+	#cap_x_vel()
+	velocity.x = move_toward(velocity.x, speed*input_direction, acceleration*delta)
 	
 	if not input_direction:
-		velocity.x = move_toward(velocity.x, 0, acceleration*delta)
+		velocity.x = move_toward(velocity.x, 0, deceleration*delta)
+
+#get wall_col_dir
+func get_wall_collision_direction() -> String:
+	if Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y)):
+		return "right"
+	elif Auto.cast(get_world_2d(), position, Vector2(position.x-$col_player.shape.size.x/2-0.1, position.y)):
+		return "left"
+	else:
+		return ""
 
 
 #caps x velocity to the player's speed
@@ -106,7 +151,9 @@ func cap_x_vel() -> void:
 func get_input_direction() -> void:
 	if Input.is_action_pressed("left"):
 		input_direction=-1
+		$animspr_player.flip_h=true
 	elif Input.is_action_pressed("right"):
 		input_direction=1
+		$animspr_player.flip_h=false
 	else:
 		input_direction=0
