@@ -8,7 +8,7 @@ var deceleration := 2000
 var acceleration := 1000
 var speed:=100
 var jump_vel := -200
-var wallkick_vel := 200
+var wallkick_vel := 230
 var input_direction := 1
 var state: States = States.FALL
 
@@ -53,7 +53,9 @@ func _physics_process(delta: float) -> void:
 			state_init(States.FALL)
 		if (state in [States.SLIDE] and not is_on_wall()):#from Sliding state needs a seperate boolean from the above if statement
 			state_init(States.FALL)
-		if (state in [States.FALL, States.SLIDE, States.SLIDE]) and coyote_time_active and jump_queued:
+		if (state in [States.FALL, States.SLIDE]) and coyote_time_active and jump_queued:
+			state_init(States.JUMP)
+		if (state in [States.FALL] and jump_queued and is_on_wall_only()):
 			state_init(States.JUMP)
 	if is_on_wall_only():
 		if (state in [States.FALL]) and ((get_wall_collision_direction()=="left" and input_direction==-1) or (get_wall_collision_direction()=="right" and input_direction==1)):
@@ -69,10 +71,10 @@ func _physics_process(delta: float) -> void:
 	if state==States.IDLE:
 		handle_horizontal_movement(delta)
 	if state==States.FALL:
-		handle_horizontal_movement(delta)
+		handle_horizontal_movement(delta, true)
 		velocity.y+=Auto.gravity*delta
 	if state==States.JUMP:
-		handle_horizontal_movement(delta)
+		handle_horizontal_movement(delta, true)
 		velocity.y+=Auto.gravity*delta
 	if state==States.SLIDE:
 		handle_horizontal_movement(delta)
@@ -81,7 +83,7 @@ func _physics_process(delta: float) -> void:
 	
 	
 	#print(state)
-	print(velocity.x)
+	#print(velocity.x)
 	move_and_slide()
 
 
@@ -110,23 +112,26 @@ func state_init(new_state) -> void:
 		coyote_timer.stop()
 		if prev_state in [States.RUN, States.IDLE, States.JUMP]:
 			velocity.y = jump_vel
+		if prev_state in [States.FALL] and is_on_wall_only():
+			handle_wallkick(get_wall_collision_direction(), .75)
 		if prev_state in [States.SLIDE]:
-			if get_wall_collision_direction()=="right":
-				@warning_ignore("integer_division")velocity.y = jump_vel/2
-				velocity.x = -wallkick_vel
-			if get_wall_collision_direction()=="left":
-				@warning_ignore("integer_division")velocity.y = jump_vel/2
-				velocity.x = wallkick_vel
+			handle_wallkick(get_wall_collision_direction())
 
 
 #handles horizontal movement accounting for input direction
-func handle_horizontal_movement(delta: float) -> void:
-	#velocity.x += acceleration*input_direction*delta
-	#cap_x_vel()
+func handle_horizontal_movement(delta: float, arial:bool=false) -> void:
 	velocity.x = move_toward(velocity.x, speed*input_direction, acceleration*delta)
 	
-	if not input_direction:
+	if not input_direction and not arial:
 		velocity.x = move_toward(velocity.x, 0, deceleration*delta)
+
+func handle_wallkick(dir, modifier:=1.0):
+	if dir=="right":
+		velocity.y = jump_vel*.8
+		velocity.x = -wallkick_vel*modifier
+	elif dir=="left":
+		velocity.y = jump_vel*.8
+		velocity.x = wallkick_vel*modifier
 
 #get wall_col_dir
 func get_wall_collision_direction() -> String:
