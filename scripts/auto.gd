@@ -1,6 +1,6 @@
 extends Node
 
-var gravity = 700
+var gravity = 800
 var cam_mode = "follow"
 
 func _process(_delta: float) -> void:

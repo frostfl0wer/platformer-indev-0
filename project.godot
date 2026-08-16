@@ -21,6 +21,7 @@ Auto="*uid://bd1vp5sce3rmc"
 
 [display]
 
+window/size/mode=2
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
 

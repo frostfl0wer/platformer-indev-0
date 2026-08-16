@@ -4,21 +4,37 @@ extends CharacterBody2D
 #player stats
 enum States {IDLE, RUN, JUMP, FALL}
 
-var acceleration := 1000
-var speed:=170
-var jump_vel := -320
+var acceleration := 2000
+var speed:=140
+var jump_vel := -300
 var input_direction := 1
 var state: States = States.FALL
+
+var jump_buffer_timer = Timer.new()
+const JUMP_BUFFER_TIME:=0.1
+
+var coyote_timer = Timer.new()
+const COYOTE_TIME:=0.1
+
+func _ready() -> void:
+	add_child(jump_buffer_timer)
+	jump_buffer_timer.one_shot = true
+	add_child(coyote_timer)
+	coyote_timer.one_shot = true
 
 #state machine tutorial used: https://www.gdquest.com/tutorial/godot/design-patterns/finite-state-machine/
 func _physics_process(delta: float) -> void:
 	get_input_direction()
-	quick_turnaround()
+	
+	if Input.is_action_just_pressed("jump"):
+		jump_buffer_timer.start(JUMP_BUFFER_TIME)
+	var jump_queued = not jump_buffer_timer.is_stopped()
+	var coyote_time_active = not coyote_timer.is_stopped()
 	
 	#states are detected based on inputs, sensors built into CharacterBody2D, and most importantly, the state the player is currently in
 	var horiz_movement := Input.is_action_pressed("left") or Input.is_action_pressed("right")
 	if is_on_floor():
-		if state in [States.RUN, States.IDLE] and Input.is_action_pressed("jump"):
+		if state in [States.RUN, States.IDLE, States.JUMP] and jump_queued:
 			state_init(States.JUMP)
 		elif (state in [States.IDLE, States.FALL]) and horiz_movement:
 			state_init(States.RUN)
@@ -27,28 +43,20 @@ func _physics_process(delta: float) -> void:
 	if not is_on_floor():
 		if (state in [States.JUMP, States.RUN, States.IDLE]) and (velocity.y >= 0 or Input.is_action_just_released("jump")):
 			state_init(States.FALL)
+		if (state in [States.FALL]) and coyote_time_active and jump_queued:
+			state_init(States.JUMP)
 	
 	#actions are determined by the state
 	if state==States.RUN:
-		velocity.x += acceleration*input_direction*delta
-		cap_x_vel()
-	
+		handle_horizontal_movement(delta)
 	if state==States.IDLE:
-		velocity.x = move_toward(velocity.x, 0, acceleration*delta)
-	
+		handle_horizontal_movement(delta)
 	if state==States.FALL:
+		handle_horizontal_movement(delta)
 		velocity.y+=Auto.gravity*delta
-		velocity.x += acceleration*input_direction*delta
-		cap_x_vel()
-		if not input_direction:
-			velocity.x = move_toward(velocity.x, 0, acceleration*delta)
-	
 	if state==States.JUMP:
-		velocity.x += acceleration*input_direction*delta
+		handle_horizontal_movement(delta)
 		velocity.y+=Auto.gravity*delta
-		cap_x_vel()
-		if not input_direction:
-			velocity.x = move_toward(velocity.x, 0, acceleration*delta)
 	
 	
 	
@@ -64,24 +72,29 @@ func state_init(new_state) -> void:
 	#on state entrance, executed once
 	if new_state==States.JUMP:
 		velocity.y = jump_vel
+		coyote_timer.stop()
 	if new_state==States.FALL:
-		velocity.y = move_toward(velocity.y, 0, 160)
+		velocity.y = move_toward(velocity.y, 0, -velocity.y*.5)
 	
 	var prev_state=state
 	state=new_state
 	
 	#on state exit, executed once
-	if prev_state==States.JUMP:
-		pass#unused for now (and maybe forever)
+	if prev_state in [States.IDLE, States.RUN] and new_state in [States.FALL]:
+		coyote_timer.start(COYOTE_TIME)
 
 
-#skip deceleration process when player changes directions, for snappier movement
-func quick_turnaround() -> void:
-	if input_direction and sign(velocity.x) != sign(input_direction):
-		velocity.x = 0
+#handles horizontal movement accounting for input direction
+func handle_horizontal_movement(delta: float) -> void:
+	velocity.x += acceleration*input_direction*delta
+	cap_x_vel()
+	
+	if not input_direction:
+		velocity.x = move_toward(velocity.x, 0, acceleration*delta)
+
 
 #caps x velocity to the player's speed
-#this is important because acceleration needs to be way higher than speed for smooth acceleration to feel good -- in fact, it still doesn't feel perfect
+#this is important because acceleration needs to be way higher than speed for smooth acceleration to feel good
 func cap_x_vel() -> void:
 	if velocity.x>speed:
 		velocity.x=speed
