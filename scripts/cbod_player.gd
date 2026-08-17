@@ -17,12 +17,16 @@ const JUMP_BUFFER_TIME:=0.1
 
 var coyote_timer = Timer.new()
 const COYOTE_TIME:=0.1
+var coyote_time_active
+#
+#var coyote_wallkick_timer = Timer.new()
+#const COYOTE_WALLKICK_TIME:=1
 
 var wall_col_dir:=""
 
 #func _draw() -> void:
-	#draw_line(position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y), Color.GREEN)
-	#draw_line(position, Vector2(position.x-$col_player.shape.size.x/2-0.1, position.y), Color.GREEN)
+	#draw_line(position, Vector2(position.x+$col_player.shape.size.x/2+3, position.y), Color.GREEN)
+	#draw_line(position, Vector2(position.x-$col_player.shape.size.x/2-3, position.y), Color.GREEN)
 
 func _ready() -> void:
 	add_child(jump_buffer_timer)
@@ -37,7 +41,7 @@ func _physics_process(delta: float) -> void:
 	if Input.is_action_just_pressed("jump"):
 		jump_buffer_timer.start(JUMP_BUFFER_TIME)
 	var jump_queued = not jump_buffer_timer.is_stopped()
-	var coyote_time_active = not coyote_timer.is_stopped()
+	coyote_time_active = not coyote_timer.is_stopped()
 	var horiz_movement := Input.is_action_pressed("left") or Input.is_action_pressed("right")
 	
 	#states are detected based on inputs, sensors built into CharacterBody2D, and most importantly, the state the player is currently in
@@ -55,12 +59,12 @@ func _physics_process(delta: float) -> void:
 			state_init(States.FALL)
 		if (state in [States.FALL, States.SLIDE]) and coyote_time_active and jump_queued:
 			state_init(States.JUMP)
-		if (state in [States.FALL] and jump_queued and is_on_wall_only()):
+		if (state in [States.FALL] and jump_queued and get_wall_collision_direction()!="" and not horiz_movement):
 			state_init(States.JUMP)
 	if is_on_wall_only():
-		if (state in [States.FALL]) and ((get_wall_collision_direction()=="left" and input_direction==-1) or (get_wall_collision_direction()=="right" and input_direction==1)):
+		if (state in [States.FALL]) and ((get_wall_collision_direction()=="left" and get_input_direction()==-1) or (get_wall_collision_direction()=="right" and get_input_direction()==1)):
 			state_init(States.SLIDE)
-		if (state in [States.SLIDE] and input_direction==0):
+		if (state in [States.SLIDE] and get_input_direction()==0):
 			state_init(States.FALL)
 		if (state in [States.SLIDE] and jump_queued):
 			state_init(States.JUMP)
@@ -105,17 +109,19 @@ func state_init(new_state) -> void:
 	state=new_state
 	
 	#on state exit, executed once
-	if prev_state in [States.IDLE, States.RUN] and new_state in [States.FALL]:
+	if prev_state in [States.IDLE, States.RUN, States.SLIDE] and new_state in [States.FALL]:
 		coyote_timer.start(COYOTE_TIME)
 	
 	if new_state==States.JUMP:
-		coyote_timer.stop()
-		if prev_state in [States.RUN, States.IDLE, States.JUMP]:
+		if prev_state in [States.RUN, States.IDLE, States.JUMP]: #default jump from ground
 			velocity.y = jump_vel
-		if prev_state in [States.FALL] and is_on_wall_only():
+		if prev_state in [States.FALL] and (coyote_time_active): #coyote jump from ground
+			velocity.y = jump_vel
+		if prev_state in [States.FALL] and (get_wall_collision_direction()!=""): #directionless jump next to wall (wallkick)
 			handle_wallkick(get_wall_collision_direction(), .75)
 		if prev_state in [States.SLIDE]:
-			handle_wallkick(get_wall_collision_direction())
+			handle_wallkick(get_wall_collision_direction()) #angled jump next to wall
+		coyote_timer.stop()
 
 
 #handles horizontal movement accounting for input direction
@@ -134,10 +140,12 @@ func handle_wallkick(dir, modifier:=1.0):
 		velocity.x = wallkick_vel*modifier
 
 #get wall_col_dir
+#NOTE: the constant 5 used to check for walls a little aways from the player might be horrible code i'm not sure
+#NOTE: i mean it didn't break anything right when i added it so it seems ok i guess
 func get_wall_collision_direction() -> String:
-	if Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+0.1, position.y)):
+	if Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+3, position.y)):
 		return "right"
-	elif Auto.cast(get_world_2d(), position, Vector2(position.x-$col_player.shape.size.x/2-0.1, position.y)):
+	elif Auto.cast(get_world_2d(), position, Vector2(position.x-$col_player.shape.size.x/2-3, position.y)):
 		return "left"
 	else:
 		return ""
@@ -153,7 +161,7 @@ func cap_x_vel() -> void:
 
 #assigns direction of input to input_direction variable as either -1:left, 0:none, or 1:right
 #this function really should've returned that value instead, but for now I'm going to leave it
-func get_input_direction() -> void:
+func get_input_direction() -> int:
 	if Input.is_action_pressed("left"):
 		input_direction=-1
 		$animspr_player.flip_h=true
@@ -162,3 +170,4 @@ func get_input_direction() -> void:
 		$animspr_player.flip_h=false
 	else:
 		input_direction=0
+	return input_direction
