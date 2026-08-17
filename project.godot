@@ -10,7 +10,7 @@ config_version=5
 
 [application]
 
-config/name="platformer indev 0 test"
+config/name="platformer indev 0 test 2"
 run/main_scene="uid://bcwkoe6gat0i4"
 config/features=PackedStringArray("4.7", "Mobile")
 config/icon="res://icon.svg"
