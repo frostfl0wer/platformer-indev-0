@@ -8,6 +8,7 @@ var deceleration := 2000
 var acceleration := 1000
 var speed:=100
 var jump_vel := -200
+var climbjump_vel := -180
 var wallkick_vel := 230
 var max_wallslide_speed:=300
 var climbing_speed := 80
@@ -82,12 +83,14 @@ func _physics_process(delta: float) -> void:
 				state_init(States.SLIDE)
 			else:
 				state_init(States.FALL)
-		if state in [States.CLIMB] and jump_queued and (get_input_direction()==0 or (get_input_direction()==1 and get_wall_collision_direction()=="right") or (get_input_direction()==-1 and get_wall_collision_direction()=="left")):
+		if state in [States.CLIMB] and Input.is_action_just_pressed("jump") and (get_input_direction()==0 or (get_input_direction()==1 and get_wall_collision_direction()=="right") or (get_input_direction()==-1 and get_wall_collision_direction()=="left")):
 			state_init(States.CLIMBJUMP)
 		if state in [States.CLIMBJUMP] and (velocity.y >= 0):
 			state_init(States.CLIMB)
 		if state in [States.CLIMBJUMP] and ((get_input_direction()==1 and get_wall_collision_direction()=="left") or (get_input_direction()==-1 and get_wall_collision_direction()=="right")):
 			state_init(States.WALLKICK)
+		if state in [States.CLIMBJUMP] and Input.is_action_just_released("jump"):
+			state_init(States.CLIMB)
 	if get_wall_collision_direction()!="":
 		if state in [States.FALL] and (not get_input_direction() and Input.is_action_just_pressed("jump")):#hack around jump_queued because it would return true if you let go the spacebar fast enough and cause you to wallbounce without an input
 			state_init(States.WALLBOUNCE)
@@ -146,7 +149,9 @@ func state_init(new_state) -> void:
 		velocity.y=jump_vel
 		coyote_timer.stop()
 	if new_state==States.CLIMBJUMP:
-		velocity.y=jump_vel
+		velocity.y=climbjump_vel
+	if new_state==States.CLIMB:
+		velocity.y=move_toward(velocity.y, 0, 50)
 	
 	var prev_state=state
 	state=new_state
