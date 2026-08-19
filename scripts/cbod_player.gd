@@ -2,7 +2,7 @@ extends CharacterBody2D
 #one goal of this node is to replicatable so when i change scenes i can just add it again
 
 #player stats
-enum States {IDLE, RUN, JUMP, FALL, SLIDE, WALLKICK, WALLBOUNCE}
+enum States {IDLE, RUN, JUMP, FALL, SLIDE, WALLKICK, WALLBOUNCE, CLIMB, CLIMBJUMP}
 
 var deceleration := 2000
 var acceleration := 1000
@@ -10,6 +10,7 @@ var speed:=100
 var jump_vel := -200
 var wallkick_vel := 230
 var max_wallslide_speed:=300
+var climbing_speed := 80
 var input_direction := 1
 var state: States = States.FALL
 
@@ -51,14 +52,16 @@ func _physics_process(delta: float) -> void:
 	if is_on_floor():
 		if state in [States.RUN, States.IDLE, States.JUMP] and jump_queued:
 			state_init(States.JUMP)
-		elif (state in [States.IDLE, States.FALL, States.SLIDE]) and horiz_movement:
+		elif (state in [States.IDLE, States.FALL, States.SLIDE, States.CLIMB]) and horiz_movement:
 			state_init(States.RUN)
-		elif state in [States.RUN, States.FALL, States.SLIDE] and not horiz_movement:
+		elif state in [States.RUN, States.FALL, States.SLIDE, States.CLIMB] and not horiz_movement:
 			state_init(States.IDLE)
 	if not is_on_floor():
 		if (state in [States.JUMP, States.RUN, States.IDLE, States.WALLKICK, States.WALLBOUNCE]) and (velocity.y >= 0 or Input.is_action_just_released("jump")):
 			state_init(States.FALL)
 		if (state in [States.SLIDE] and (not is_on_wall() or get_input_direction()==0)):#from Sliding state needs a seperate boolean from the above if statement
+			state_init(States.FALL)
+		if (state in [States.CLIMB, States.CLIMBJUMP] and (not is_on_wall())):
 			state_init(States.FALL)
 		if (state in [States.FALL, States.SLIDE]) and coyote_time_active and jump_queued and get_wall_collision_direction()=="":
 			state_init(States.JUMP)
@@ -69,6 +72,21 @@ func _physics_process(delta: float) -> void:
 		if state in [States.FALL] and ((get_wall_collision_direction()=="left" and get_input_direction()==-1) or (get_wall_collision_direction()=="right" and get_input_direction()==1)):
 			state_init(States.SLIDE)
 		if state in [States.SLIDE] and (get_input_direction() and jump_queued):
+			state_init(States.WALLKICK)
+		if state in [States.CLIMB] and jump_queued and ((get_input_direction()==1 and get_wall_collision_direction()=="left") or (get_input_direction()==-1 and get_wall_collision_direction()=="right")):
+			state_init(States.WALLKICK)
+		if state in [States.FALL, States.SLIDE, States.RUN, States.IDLE, States.JUMP] and Input.is_action_pressed("climb"):#NOTE: this is using action_pressed() which is terrible i just dont know how else to do this
+			state_init(States.CLIMB)
+		if state in [States.CLIMB] and Input.is_action_just_released("climb"):
+			if get_input_direction():
+				state_init(States.SLIDE)
+			else:
+				state_init(States.FALL)
+		if state in [States.CLIMB] and jump_queued and (get_input_direction()==0 or (get_input_direction()==1 and get_wall_collision_direction()=="right") or (get_input_direction()==-1 and get_wall_collision_direction()=="left")):
+			state_init(States.CLIMBJUMP)
+		if state in [States.CLIMBJUMP] and (velocity.y >= 0):
+			state_init(States.CLIMB)
+		if state in [States.CLIMBJUMP] and ((get_input_direction()==1 and get_wall_collision_direction()=="left") or (get_input_direction()==-1 and get_wall_collision_direction()=="right")):
 			state_init(States.WALLKICK)
 	if get_wall_collision_direction()!="":
 		if state in [States.FALL] and (not get_input_direction() and Input.is_action_just_pressed("jump")):#hack around jump_queued because it would return true if you let go the spacebar fast enough and cause you to wallbounce without an input
@@ -97,6 +115,10 @@ func _physics_process(delta: float) -> void:
 		#TODO: check if this is actually working/useful
 		if velocity.y > max_wallslide_speed:
 			velocity.y=max_wallslide_speed
+	if state==States.CLIMB:
+		velocity.y = move_toward(velocity.y, climbing_speed*total_input_direction()[1], acceleration*delta)
+	if state==States.CLIMBJUMP:
+		velocity.y += Auto.gravity*delta
 	
 	
 	
@@ -123,6 +145,8 @@ func state_init(new_state) -> void:
 	if new_state==States.JUMP:
 		velocity.y=jump_vel
 		coyote_timer.stop()
+	if new_state==States.CLIMBJUMP:
+		velocity.y=jump_vel
 	
 	var prev_state=state
 	state=new_state
@@ -132,6 +156,11 @@ func state_init(new_state) -> void:
 		coyote_timer.start(COYOTE_TIME)
 	if prev_state in [States.SLIDE] and new_state in [States.FALL]:
 		slide_coyote_timer.start(SLIDE_COYOTE_TIME)
+	if prev_state in [States.CLIMB, States.CLIMBJUMP] and new_state in[States.FALL]:
+		if get_wall_collision_direction(3, $col_player.shape.size.y)=="left" and not Input.is_action_pressed("left"):
+			velocity.x = -100
+		if get_wall_collision_direction(3, $col_player.shape.size.y)=="right" and not Input.is_action_pressed("right"):
+			velocity.x = 100
 
 
 #handles horizontal movement accounting for input direction
@@ -150,10 +179,10 @@ func handle_wallkick(dir, modifier:=1.0):
 		velocity.x = wallkick_vel*modifier
 
 #get wall_col_dir
-func get_wall_collision_direction(dist:=3) -> String:
-	if Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+dist, position.y)):
+func get_wall_collision_direction(dist:=3, height:=0) -> String:
+	if Auto.cast(get_world_2d(), position, Vector2(position.x+$col_player.shape.size.x/2+dist, position.y+height)):
 		return "right"
-	elif Auto.cast(get_world_2d(), position, Vector2(position.x-$col_player.shape.size.x/2-dist, position.y)):
+	elif Auto.cast(get_world_2d(), position, Vector2(position.x-$col_player.shape.size.x/2-dist, position.y+height)):
 		return "left"
 	else:
 		return ""
@@ -170,3 +199,16 @@ func get_input_direction() -> int:
 	else:
 		input_direction=0
 	return input_direction
+
+
+func total_input_direction() -> Array:
+	var total_dir = [0, 0]
+	if Input.is_action_pressed("left"):
+		total_dir[0]=-1
+	if Input.is_action_pressed("right"):
+		total_dir[0]=1
+	if Input.is_action_pressed("up"):
+		total_dir[1]=-1
+	if Input.is_action_pressed("down"):
+		total_dir[1]=1
+	return total_dir
