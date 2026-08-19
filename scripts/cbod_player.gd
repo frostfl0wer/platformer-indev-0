@@ -44,7 +44,6 @@ func _ready() -> void:
 
 #state machine tutorial used: https://www.gdquest.com/tutorial/godot/design-patterns/finite-state-machine/
 func _physics_process(delta: float) -> void:
-	#print(stamina)
 	get_input_direction()
 	
 	if Input.is_action_just_pressed("jump"):
@@ -58,9 +57,9 @@ func _physics_process(delta: float) -> void:
 	if is_on_floor():
 		if state in [States.RUN, States.IDLE, States.JUMP] and jump_queued:
 			state_init(States.JUMP)
-		elif (state in [States.IDLE, States.FALL, States.SLIDE, States.CLIMB]) and horiz_movement:
+		elif (state in [States.IDLE, States.FALL, States.SLIDE]) and horiz_movement:
 			state_init(States.RUN)
-		elif state in [States.RUN, States.FALL, States.SLIDE, States.CLIMB] and not horiz_movement:
+		elif state in [States.RUN, States.FALL, States.SLIDE] and not horiz_movement:
 			state_init(States.IDLE)
 	if not is_on_floor():
 		if (state in [States.JUMP, States.RUN, States.IDLE, States.WALLKICK, States.WALLBOUNCE]) and (velocity.y >= 0 or Input.is_action_just_released("jump")):
@@ -81,9 +80,7 @@ func _physics_process(delta: float) -> void:
 			state_init(States.WALLKICK)
 		if state in [States.CLIMB] and stamina>0 and jump_queued and ((get_input_direction()==1 and get_wall_collision_direction()=="left") or (get_input_direction()==-1 and get_wall_collision_direction()=="right")):
 			state_init(States.WALLKICK)
-		if state in [States.FALL, States.SLIDE, States.RUN, States.IDLE, States.JUMP] and stamina>0 and Input.is_action_pressed("climb"):#NOTE: this is using action_pressed() which is terrible i just dont know how else to do this
-			state_init(States.CLIMB)
-		if state in [States.CLIMB] and Input.is_action_just_released("climb"):
+		if state in [States.CLIMB] and Input.is_action_just_released("climb") and not is_on_floor():
 			if get_input_direction():
 				state_init(States.SLIDE)
 			else:
@@ -99,6 +96,13 @@ func _physics_process(delta: float) -> void:
 	if get_wall_collision_direction()!="":
 		if state in [States.FALL] and (not get_input_direction() and Input.is_action_just_pressed("jump")):#hack around jump_queued because it would return true if you let go the spacebar fast enough and cause you to wallbounce without an input
 			state_init(States.WALLBOUNCE)
+		if state in [States.FALL, States.SLIDE, States.RUN, States.IDLE, States.JUMP] and stamina>0 and Input.is_action_pressed("climb"):#NOTE: this is using action_pressed() which is terrible i just dont know how else to do this
+			state_init(States.CLIMB)
+		if state in [States.CLIMB] and Input.is_action_just_released("climb") and is_on_floor():
+			if horiz_movement:
+				state_init(States.RUN)
+			else:
+				state_init(States.IDLE)
 	if stamina <= 0:
 		if state in [States.CLIMB, States.CLIMBJUMP]:
 			state_init(States.FALL)
@@ -238,9 +242,10 @@ func total_input_direction() -> Array:
 func _on_stamina_tick_timer_timeout() -> void:#that was surprisingly annoying
 	if state in [States.CLIMB, States.CLIMBJUMP, States.WALLKICK]:
 		stamina-=1
-	if stamina<10 and stamina%2==0:
+		print(stamina)
+	if stamina<10 and modulate==Color.WHITE:
 		modulate=Color.RED
-	elif stamina<10 and stamina%2!=0:
+	elif stamina<10 and modulate==Color.RED:
 		modulate=Color.WHITE
-	else:
+	elif stamina>=10:
 		modulate=Color.WHITE
