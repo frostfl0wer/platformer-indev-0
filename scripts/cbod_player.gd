@@ -44,7 +44,7 @@ func _ready() -> void:
 
 #state machine tutorial used: https://www.gdquest.com/tutorial/godot/design-patterns/finite-state-machine/
 func _physics_process(delta: float) -> void:
-	print(stamina)
+	#print(stamina)
 	get_input_direction()
 	
 	if Input.is_action_just_pressed("jump"):
@@ -88,7 +88,7 @@ func _physics_process(delta: float) -> void:
 				state_init(States.SLIDE)
 			else:
 				state_init(States.FALL)
-		if state in [States.CLIMB] and stamina>0 and Input.is_action_just_pressed("jump") and (get_input_direction()==0 or (get_input_direction()==1 and get_wall_collision_direction()=="right") or (get_input_direction()==-1 and get_wall_collision_direction()=="left")):
+		if state in [States.CLIMB] and stamina>0 and Input.is_action_just_pressed("jump") and (get_input_direction()==0 or (get_input_direction()==1 and get_wall_collision_direction(3, $col_player.shape.size.y)=="right") or (get_input_direction()==-1 and get_wall_collision_direction(3, $col_player.shape.size.y)=="left")):
 			state_init(States.CLIMBJUMP)
 		if state in [States.CLIMBJUMP] and (velocity.y >= 0):
 			state_init(States.CLIMB)
