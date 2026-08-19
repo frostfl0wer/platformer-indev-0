@@ -26,3 +26,9 @@ sprite_frames = SubResource("SpriteFrames_yf5fn")
 
 [node name="col_player" type="CollisionShape2D" parent="." unique_id=301672506]
 shape = SubResource("RectangleShape2D_h1ad7")
+
+[node name="stamina_tick_timer" type="Timer" parent="." unique_id=997912575]
+wait_time = 0.1
+autostart = true
+
+[connection signal="timeout" from="stamina_tick_timer" to="." method="_on_stamina_tick_timer_timeout"]

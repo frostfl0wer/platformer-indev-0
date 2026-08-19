@@ -26,6 +26,10 @@ const SLIDE_COYOTE_TIME:=0.1
 
 var wall_col_dir:=""
 
+var stamina=40
+var max_stamina=40
+var climb_actions_stamina_cost = 7
+
 #func _draw() -> void:
 	#draw_line(position, Vector2(position.x+$col_player.shape.size.x/2+3, position.y), Color.GREEN)
 	#draw_line(position, Vector2(position.x-$col_player.shape.size.x/2-3, position.y), Color.GREEN)
@@ -40,6 +44,7 @@ func _ready() -> void:
 
 #state machine tutorial used: https://www.gdquest.com/tutorial/godot/design-patterns/finite-state-machine/
 func _physics_process(delta: float) -> void:
+	print(stamina)
 	get_input_direction()
 	
 	if Input.is_action_just_pressed("jump"):
@@ -74,16 +79,16 @@ func _physics_process(delta: float) -> void:
 			state_init(States.SLIDE)
 		if state in [States.SLIDE] and (get_input_direction() and jump_queued):
 			state_init(States.WALLKICK)
-		if state in [States.CLIMB] and jump_queued and ((get_input_direction()==1 and get_wall_collision_direction()=="left") or (get_input_direction()==-1 and get_wall_collision_direction()=="right")):
+		if state in [States.CLIMB] and stamina>0 and jump_queued and ((get_input_direction()==1 and get_wall_collision_direction()=="left") or (get_input_direction()==-1 and get_wall_collision_direction()=="right")):
 			state_init(States.WALLKICK)
-		if state in [States.FALL, States.SLIDE, States.RUN, States.IDLE, States.JUMP] and Input.is_action_pressed("climb"):#NOTE: this is using action_pressed() which is terrible i just dont know how else to do this
+		if state in [States.FALL, States.SLIDE, States.RUN, States.IDLE, States.JUMP] and stamina>0 and Input.is_action_pressed("climb"):#NOTE: this is using action_pressed() which is terrible i just dont know how else to do this
 			state_init(States.CLIMB)
 		if state in [States.CLIMB] and Input.is_action_just_released("climb"):
 			if get_input_direction():
 				state_init(States.SLIDE)
 			else:
 				state_init(States.FALL)
-		if state in [States.CLIMB] and Input.is_action_just_pressed("jump") and (get_input_direction()==0 or (get_input_direction()==1 and get_wall_collision_direction()=="right") or (get_input_direction()==-1 and get_wall_collision_direction()=="left")):
+		if state in [States.CLIMB] and stamina>0 and Input.is_action_just_pressed("jump") and (get_input_direction()==0 or (get_input_direction()==1 and get_wall_collision_direction()=="right") or (get_input_direction()==-1 and get_wall_collision_direction()=="left")):
 			state_init(States.CLIMBJUMP)
 		if state in [States.CLIMBJUMP] and (velocity.y >= 0):
 			state_init(States.CLIMB)
@@ -94,6 +99,9 @@ func _physics_process(delta: float) -> void:
 	if get_wall_collision_direction()!="":
 		if state in [States.FALL] and (not get_input_direction() and Input.is_action_just_pressed("jump")):#hack around jump_queued because it would return true if you let go the spacebar fast enough and cause you to wallbounce without an input
 			state_init(States.WALLBOUNCE)
+	if stamina <= 0:
+		if state in [States.CLIMB, States.CLIMBJUMP]:
+			state_init(States.FALL)
 	
 	#actions are determined by the state
 	if state==States.RUN:
@@ -124,7 +132,6 @@ func _physics_process(delta: float) -> void:
 		velocity.y += Auto.gravity*delta
 	
 	
-	
 	#print(state)
 	#print(velocity.x)
 	move_and_slide()
@@ -140,9 +147,6 @@ func state_init(new_state) -> void:
 		velocity.y = move_toward(velocity.y, 0, -velocity.y*.5)
 	if new_state==States.SLIDE:
 		velocity.y= move_toward(velocity.y, 0, 100)
-	if new_state==States.WALLKICK:
-		handle_wallkick(get_wall_collision_direction(10))
-		slide_coyote_timer.stop()
 	if new_state==States.WALLBOUNCE:
 		handle_wallkick(get_wall_collision_direction(), .75)
 	if new_state==States.JUMP:
@@ -152,6 +156,8 @@ func state_init(new_state) -> void:
 		velocity.y=climbjump_vel
 	if new_state==States.CLIMB:
 		velocity.y=move_toward(velocity.y, 0, 50)
+	if new_state in [States.IDLE, States.RUN]:
+		stamina=max_stamina
 	
 	var prev_state=state
 	state=new_state
@@ -166,6 +172,16 @@ func state_init(new_state) -> void:
 			velocity.x = -100
 		if get_wall_collision_direction(3, $col_player.shape.size.y)=="right" and not Input.is_action_pressed("right"):
 			velocity.x = 100
+		stamina -= climb_actions_stamina_cost
+	if new_state==States.WALLKICK:
+		if prev_state==States.CLIMBJUMP:
+			if get_wall_collision_direction()=="left":
+				velocity.x = -wallkick_vel
+			if get_wall_collision_direction()=="right":
+				velocity.x = wallkick_vel
+		else:
+			handle_wallkick(get_wall_collision_direction(10))
+			slide_coyote_timer.stop()
 
 
 #handles horizontal movement accounting for input direction
@@ -217,3 +233,14 @@ func total_input_direction() -> Array:
 	if Input.is_action_pressed("down"):
 		total_dir[1]=1
 	return total_dir
+
+
+func _on_stamina_tick_timer_timeout() -> void:#that was surprisingly annoying
+	if state in [States.CLIMB, States.CLIMBJUMP, States.WALLKICK]:
+		stamina-=1
+	if stamina<10 and stamina%2==0:
+		modulate=Color.RED
+	elif stamina<10 and stamina%2!=0:
+		modulate=Color.WHITE
+	else:
+		modulate=Color.WHITE
